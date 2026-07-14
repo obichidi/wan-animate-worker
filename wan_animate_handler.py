@@ -235,11 +235,18 @@ def handle_animate(input_data):
     # the floor, which made the panel's prompt box appear to do nothing.
     prompt = (input_data.get("prompt") or "").strip()
     negative_prompt = (input_data.get("negative_prompt") or "").strip()
-    # Classifier-free guidance is what makes the prompt bite: at 1.0 the negative
-    # branch is skipped and the text conditioning barely registers. Default to a
-    # real CFG scale when a prompt is present, and only fall back to Wan's
-    # promptless 1.0 when there's nothing to guide toward.
-    guidance_scale = float(input_data.get("guidance_scale") or (3.5 if prompt else 1.0))
+    # Wan-Animate's documented default is 1.0, and it needs to stay there. An
+    # earlier version of this handler raised it to 3.5 whenever a prompt was
+    # present, on the theory that CFG is what makes a prompt "bite" — in practice
+    # that overcooked the render and the tail of the clip blew out into a blur.
+    # The prompt still conditions the model at 1.0 (it's fed to the text encoder
+    # regardless; CFG only amplifies the positive-vs-negative contrast), so the
+    # scale is left alone unless a caller deliberately overrides it.
+    #
+    # Corollary: at guidance_scale 1.0 there is no negative branch, so
+    # negative_prompt is inert. It's still forwarded for callers who raise the
+    # scale.
+    guidance_scale = float(input_data.get("guidance_scale") or 1.0)
 
     workdir = tempfile.mkdtemp(prefix="wan_animate_")
     try:
