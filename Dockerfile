@@ -80,6 +80,17 @@ WORKDIR /opt/wan22
 #                                     mode that actually exercises SAM2)
 #   - moviepy<2                    : code uses the removed `moviepy.editor` API
 #   - decord, loguru               : driving-video frame IO / logging
+#   - matplotlib, tqdm             : human_visualization.py imports matplotlib at
+#                                     module load (pose colormaps); tqdm is used
+#                                     by the pipeline loops
+#   - hydra-core, omegaconf        : sam_utils/video_predictor config loading
+#
+# The list above is now the FULL third-party import closure of
+# wan/modules/animate/preprocess/*.py (audited across all 8 modules:
+# PIL, cv2, decord, diffusers, hydra, loguru, matplotlib, moviepy, numpy,
+# omegaconf, onnxruntime, sam2, torch, tqdm), not a guess — the earlier
+# "KNOWN RISK" note about un-audited imports is what let a missing matplotlib
+# take down preprocess_data.py at import time on the first real job.
 # NOT installing the old Moore-AnimateAnyone Dockerfile's heavy mmcv/mmdet/mmpose
 # stack — Wan's own preprocessing is ONNX-based and doesn't need it.
 #
@@ -105,6 +116,10 @@ RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
       "moviepy<2" \
       decord \
       loguru \
+      matplotlib \
+      tqdm \
+      hydra-core \
+      omegaconf \
       runpod \
       opencv-python-headless \
       "imageio[ffmpeg]" \
@@ -113,6 +128,13 @@ RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
 
 RUN python -c "import torch, diffusers; print(f'torch={torch.__version__} cuda={torch.version.cuda} diffusers={diffusers.__version__}')" && \
     python -c "from diffusers import WanAnimatePipeline; print('WanAnimatePipeline import OK')"
+
+# Import stage 1 exactly the way the handler subprocesses it (same cwd, same
+# same-directory imports). This turns a missing preprocessing dependency into a
+# BUILD failure instead of a GPU-minutes failure on the first real job — which
+# is how the missing matplotlib was found.
+RUN cd /opt/wan22/wan/modules/animate/preprocess && \
+    python -c "from process_pipepline import ProcessPipeline; print('preprocess import chain OK')"
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
