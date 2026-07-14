@@ -84,6 +84,13 @@ WORKDIR /opt/wan22
 #                                     module load (pose colormaps); tqdm is used
 #                                     by the pipeline loops
 #   - hydra-core, omegaconf        : sam_utils/video_predictor config loading
+#   - ftfy, regex                  : WanAnimatePipeline's prompt_clean() calls
+#                                     ftfy.fix_text() behind a lazy import — with
+#                                     ftfy absent it dies on `name 'ftfy' is not
+#                                     defined`. This path only runs when a prompt
+#                                     is actually passed, which is why it stayed
+#                                     hidden while the handler was dropping the
+#                                     prompt entirely.
 #
 # The list above is now the FULL third-party import closure of
 # wan/modules/animate/preprocess/*.py (audited across all 8 modules:
@@ -120,6 +127,8 @@ RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
       tqdm \
       hydra-core \
       omegaconf \
+      ftfy \
+      regex \
       runpod \
       opencv-python-headless \
       "imageio[ffmpeg]" \
@@ -135,6 +144,14 @@ RUN python -c "import torch, diffusers; print(f'torch={torch.__version__} cuda={
 # is how the missing matplotlib was found.
 RUN cd /opt/wan22/wan/modules/animate/preprocess && \
     python -c "from process_pipepline import ProcessPipeline; print('preprocess import chain OK')"
+
+# Exercise the pipeline's prompt-cleaning path (no weights needed). This is the
+# code diffusers runs on every prompted generation, and it was failing at
+# inference time with "name 'ftfy' is not defined" — a build-time check is far
+# cheaper than an H100 job to catch it.
+RUN python -c "from diffusers.pipelines.wan.pipeline_wan_animate import prompt_clean; \
+assert prompt_clean('  a MAN in a black coat  ') == 'a MAN in a black coat'; \
+print('prompt_clean OK')"
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
