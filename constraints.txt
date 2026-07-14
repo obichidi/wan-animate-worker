@@ -1,0 +1,12 @@
+# Pip constraints for the Wan2.2-Animate image (Dockerfile.wan_animate).
+#
+# These three come from the cu124 PyTorch index in an earlier layer. sam2
+# declares torch>=2.5.1, and without a constraint pip "satisfies" that by
+# pulling a brand-new torch wheel from PyPI (a cu130 build) while leaving the
+# already-installed torchaudio behind — the resulting ABI mismatch makes
+# libtorchaudio.so unloadable and `from diffusers import WanAnimatePipeline`
+# fail at import. Constraining (not requiring) them means pip may only ever
+# resolve to the versions already installed.
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0

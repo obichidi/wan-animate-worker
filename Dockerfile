@@ -61,7 +61,15 @@ WORKDIR /opt/wan22
 # range meant for that generate.py, which would fight the newer transformers
 # WanAnimatePipeline (diffusers) actually needs. Installing an explicit,
 # curated set instead, covering exactly what's used:
-#   - torch/torchvision/torchaudio : pinned cu124 build for a stable ABI
+#   - torch/torchvision/torchaudio : pinned cu124 build for a stable ABI. The
+#                                     floor is set by sam2 (needs torch>=2.5.1)
+#                                     — an earlier 2.4.0 pin here got silently
+#                                     upgraded to a cu130 PyPI wheel when sam2
+#                                     installed, which left torchaudio 2.4.0
+#                                     linked against the old ABI and made
+#                                     `from diffusers import WanAnimatePipeline`
+#                                     die on libtorchaudio.so. Keep these three
+#                                     in lockstep and at/above sam2's floor.
 #   - diffusers>=0.39.0            : first release with WanAnimatePipeline
 #   - transformers/accelerate/safetensors/huggingface_hub : diffusers deps
 #   - onnxruntime-gpu              : runs vitpose_h_wholebody.onnx + yolov10m.onnx
@@ -81,10 +89,15 @@ WORKDIR /opt/wan22
 # if the first build fails on a missing import from one of those, add it here.
 RUN python -m pip install --no-cache-dir --upgrade pip && \
     python -m pip install --no-cache-dir \
-      torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
+      torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 \
       --index-url https://download.pytorch.org/whl/cu124
 
-RUN python -m pip install --no-cache-dir \
+# Pin the CUDA torch build for every later resolution too. Without this, any
+# dependency with a `torch>=…` floor above the installed version drags in a
+# fresh PyPI torch wheel (a different CUDA build) and silently breaks the ABI.
+COPY constraints.txt /tmp/constraints.txt
+
+RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
       "diffusers>=0.39.0" \
       "transformers>=4.51.0" \
       accelerate safetensors huggingface_hub \
@@ -96,7 +109,7 @@ RUN python -m pip install --no-cache-dir \
       opencv-python-headless \
       "imageio[ffmpeg]" \
       requests \
-      && python -m pip install --no-cache-dir "git+https://github.com/facebookresearch/sam2.git"
+      && python -m pip install --no-cache-dir -c /tmp/constraints.txt "git+https://github.com/facebookresearch/sam2.git"
 
 RUN python -c "import torch, diffusers; print(f'torch={torch.__version__} cuda={torch.version.cuda} diffusers={diffusers.__version__}')" && \
     python -c "from diffusers import WanAnimatePipeline; print('WanAnimatePipeline import OK')"
